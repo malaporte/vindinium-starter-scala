@@ -19,10 +19,25 @@ case class Pos(x: Int, y: Int) {
     case West  ⇒ copy(y = y - 1)
   }
 
+  def dirTo(to: Pos) = {
+    if (to.x < x) {
+      Dir.North
+    } else if (to.x > x) {
+      Dir.South
+    } else if (to.y < y) {
+      Dir.West
+    } else if (to.y > y) {
+      Dir.East
+    } else {
+      Dir.Stay
+    }
+  }
+
   def isIn(size: Int) = (x >= 0 && x < size && y >= 0 && y < size)
 }
 
 sealed trait Tile
+
 object Tile {
   case object Air extends Tile
   case object Wall extends Tile

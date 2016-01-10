@@ -29,7 +29,7 @@ final class Server(
     Json.parse(req
       .option(HttpOptions.connTimeout(5000))
       .option(HttpOptions.readTimeout(timeout))
-      .asString).as[Input]
+      .asString).as[Input](inputReads)
 
   // JSON parsing
 

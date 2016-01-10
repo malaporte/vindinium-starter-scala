@@ -2,7 +2,7 @@ package bot
 
 object Main {
 
-  val bot: Bot = new RandomBot
+  val bot: Bot = new MlaporteBot
 
   def main(args: Array[String]) = makeServer match {
     case Left(error) ⇒ println(error)
