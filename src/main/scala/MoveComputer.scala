@@ -5,6 +5,7 @@ import bot.Dir.Dir
 import scala.collection.mutable
 
 class MoveComputer(input: Input) {
+  import MoveComputer._
 
   case class TileAndPos(tile: Tile, pos: Pos)
 
@@ -32,6 +33,7 @@ class MoveComputer(input: Input) {
 
     moves ++= getDrinkOfOpportunityMoves
     moves ++= getGrabMineMoves
+    moves ++= getAggressiveMoves
     moves ++= getFallbackMoves
   }
 
@@ -39,25 +41,34 @@ class MoveComputer(input: Input) {
     val pathsToTaverns = scoredPathsTo(_ == Tile.Tavern)
 
     pathsToTaverns.headOption match {
-      case Some(path) if path.path.length == 1 && hero.life < MoveComputer.DRINK_OF_OPPORTUNITY_THRESHOLD =>
-        Seq(MoveAndScore(s"Why not take a drink while I'm here?", path.path.firstMove, MoveComputer.DRINK_OF_OPPORTUNITY_SCORE))
+      case Some(path) if path.path.length == 1 && hero.life < DRINK_OF_OPPORTUNITY_THRESHOLD =>
+        Seq(MoveAndScore(s"Why not take a drink while I'm here?", path.path.firstMove, DRINK_OF_OPPORTUNITY_SCORE))
       case _ =>
         Nil
     }
   }
 
   private def getGrabMineMoves: Seq[MoveAndScore] = {
-    val pathsToAvailableMines = scoredPathsTo(isAvailableMine, minimumLife = MoveComputer.GRAB_MINE_MINIMUM_LIFE)
+    val pathsToAvailableMines = scoredPathsTo(isAvailableMine, minimumLife = GRAB_MINE_MINIMUM_LIFE)
 
     pathsToAvailableMines.map { path =>
-      val score = MoveComputer.GRAB_MINE_SCORE - (path.path.cost * MoveComputer.GRAB_MINE_COST_FACTOR) + computeLocationScore(path.pos)
+      val score = GRAB_MINE_SCORE - (path.path.cost * GRAB_MINE_COST_FACTOR) + computeLocationScore(path.pos)
+      MoveAndScore(s"Going to mine at ${path.pos}", path.path.firstMove, score)
+    }
+  }
+
+  private def getAggressiveMoves: Seq[MoveAndScore] = {
+    val pathsToEnemies = scoredPathsTo(isEnemy(minimumMines = ATTACK_MINIMUM_MINES), minimumLife = ATTACK_MINIMUM_LIFE)
+
+    pathsToEnemies.map { path =>
+      val score = ATTACK_SCORE - (path.path.cost * ATTACK_COST_FACTOR) + computeLocationScore(path.pos)
       MoveAndScore(s"Going to mine at ${path.pos}", path.path.firstMove, score)
     }
   }
 
   private def getFallbackMoves: Seq[MoveAndScore] = {
     scoredPathsTo(_ == Tile.Tavern).map { path =>
-      val score = MoveComputer.BORED_DRINK_SCORE + computeLocationScore(path.pos)
+      val score = BORED_DRINK_SCORE + computeLocationScore(path.pos)
       MoveAndScore(s"Go to tavern ${path.pos} since I have nothing to do", path.path.firstMove, score)
     }
   }
@@ -77,26 +88,21 @@ class MoveComputer(input: Input) {
   private def computeLocationScore(pos: Pos): Float = {
     var score = 0f
 
-    score += computeProximityScore(pos, isAvailableMine) * MoveComputer.LOCATION_MINE_PROXIMITY_FACTOR
-    score += computeProximityScore(pos, _ == Tile.Tavern) * MoveComputer.LOCATION_TAVERN_PROXIMITY_FACTOR
+    score -= computeDistanceScore(pos, isAvailableMine) * LOCATION_MINE_PROXIMITY_FACTOR
+    score -= computeDistanceScore(pos, _ == Tile.Tavern) * LOCATION_TAVERN_PROXIMITY_FACTOR
+    score += computeDistanceScore(pos, isEnemy()) * LOCATION_ENEMY_DISTANCE_FACTOR
 
     score
   }
 
-  private def computeProximityScore(pos: Pos,
-                                    matcher: Tile => Boolean): Float = {
+  private def computeDistanceScore(pos: Pos,
+                                   matcher: Tile => Boolean): Float = {
 
     val allPaths = allTiles
       .filter(x => matcher(x.tile))
       .flatMap(tile => pathFinder.findPath(pos, tile.pos).map(TileAndPath(tile.tile, tile.pos, _)))
 
-    allPaths.map(_.path.cost) match {
-      case Nil =>
-        0
-      case costs =>
-        val max = costs.max.toFloat
-        costs.map(max / _).sum
-    }
+    allPaths.map(_.path.cost).sum
   }
 
   private def allTiles: Seq[TileAndPos] = {
@@ -112,6 +118,11 @@ class MoveComputer(input: Input) {
     case mine: Tile.Mine => mine.heroId.isEmpty || !mine.heroId.contains(hero.id)
     case _ => false
   }
+
+  private def isEnemy(minimumMines: Int = 0)(tile: Tile): Boolean = tile match {
+    case enemy: Tile.Hero if enemy.id != hero.id && game.heroes.find(_.id == enemy.id).get.mineCount >= minimumMines => true
+    case _ => false
+  }
 }
 
 object MoveComputer {
@@ -123,10 +134,16 @@ object MoveComputer {
 
   val GRAB_MINE_SCORE = 10000f
   val GRAB_MINE_COST_FACTOR = 5f
-  val GRAB_MINE_MINIMUM_LIFE = MINE_COST + 1
+  val GRAB_MINE_MINIMUM_LIFE = 30
+
+  val ATTACK_SCORE = 20000f
+  val ATTACK_MINIMUM_MINES = 2
+  val ATTACK_COST_FACTOR = 20f
+  val ATTACK_MINIMUM_LIFE = 80
 
   val BORED_DRINK_SCORE = -100000f
 
   val LOCATION_MINE_PROXIMITY_FACTOR = 5f
   val LOCATION_TAVERN_PROXIMITY_FACTOR = 5f
+  val LOCATION_ENEMY_DISTANCE_FACTOR = 10f
 }
