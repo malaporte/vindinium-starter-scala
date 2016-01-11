@@ -22,7 +22,17 @@ case class Path(from: Pos,
 }
 
 class PathFinder(board: Board) {
+  private val cache = mutable.Map[(Pos, Pos), Option[Path]]()
+
   def findPath(from: Pos, to: Pos): Option[Path] = {
+    cache.getOrElse(from -> to, {
+      val path = computePath(from, to)
+      cache.put(from -> to, path)
+      path
+    })
+  }
+
+  private def computePath(from: Pos, to: Pos): Option[Path] = {
     val open = mutable.Set[Pos](from)
     val closed = mutable.Set[Pos]()
     val g = mutable.Map(from -> 0)
@@ -75,7 +85,7 @@ class PathFinder(board: Board) {
     None
   }
 
-  def walkableNeighbors(pos: Pos): Set[Pos] = {
+  private def walkableNeighbors(pos: Pos): Set[Pos] = {
     pos.neighbors.filter(x => board.at(x).contains(Tile.Air))
   }
 
